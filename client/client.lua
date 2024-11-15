@@ -1,6 +1,7 @@
 local config = lib.require 'config'
 local hiredTrucks = false
-local trailerNetId
+local trailerNetId, truckerNetId
+local truckDrivers = {}
 
 local blipTruck = AddBlipForCoord(vec3(1241.65, -3257.28, 6.03))
 SetBlipSprite(blipTruck, 632)
@@ -12,15 +13,45 @@ AddTextComponentSubstringPlayerName('Trucker Job')
 EndTextCommandSetBlipName(blipTruck)
 
 -- Todo:
--- Marcar o blip no mapa (fazer alguma forma de iniciar o serviço e iniciar o blip)
 -- Fazer a box zones dos locais (fazer a checagem de dentro da area se tem o trailer)
--- Fazer alguma forma de desaclopar o trailer (dentro da area fazer que a entidade seja excluida)
 -- Após desaclopar marcar o retorno para a base (Provavel ter que fazer alguma variavel para verificar, tem no forum lá do cfx)
 -- Assim que retorna e marcar como Finish Work (Outra variavel para checar caso esteja terminado o serviço ou está querendo exluir o veiculo)
--- Deletar o caminhão 
+-- Deletar o caminhão
 -- Player Recebe os itens
 -- Timer começa a contar até a proxima entrega (Fazer isso nos server side com um array)
 -- Fazer alguma forma de o timer contar no servidor
+
+local function generateRandomRoute()
+    
+end
+
+local function isTrailerAttached(netId)
+    local Truck = NetToVeh(netId)
+    local _, isTrailerAttached = GetVehicleTrailerVehicle(Truck)
+    if isTrailerAttached > 1 then
+        return true
+    else
+        return false
+    end
+end
+
+local function createDeliveryZone()
+    local sphere = lib.zones.sphere({
+        coords = vec3(1276.07, -3231.75, 5.9),
+        radius = 10,
+        debug = true,
+        inside = function()
+            if IsControlJustPressed(0, 46) and isTrailerAttached(truckerNetId) then 
+                local sucess = lib.callback.await('lonf:trucker:deleteEntity', false, trailerNetId)
+                if sucess then 
+                    delivered = true
+                end
+            end
+        end,
+        onEnter = onEnter,
+        onExit = onExit
+    })
+end
 
 local function routeDelivery()
     RouteBlip = AddBlipForCoord(1258.38, -3101.29, 5.26)
@@ -46,7 +77,6 @@ local function hireTruck(netId)
 end
 
 local function updateOptions()
-
     exports.ox_target:removeModel(config.model)
 
     if not hiredTrucks then
@@ -69,15 +99,19 @@ local function updateOptions()
                         return
                     end
 
-                    local netId = lib.callback.await('lonf:trucker:spawnTruck', false)
-                    hireTruck(netId)
+                    truckerNetId = lib.callback.await('lonf:trucker:spawnTruck', false)
+                    hireTruck(truckerNetId)
 
                     trailerNetId = lib.callback.await('lonf:trucker:spawnTrailer', false)
                     hireTruck(trailerNetId)
 
                     hiredTrucks = true
 
+                    delivered = lib.callback.await('lonf:trucker:clockIn', false)
+                    print(delivered)
+
                     routeDelivery()
+                    createDeliveryZone()
                     updateOptions()
                 end,
                 distance = 1.5,
@@ -90,7 +124,14 @@ local function updateOptions()
                 label = 'Finish Work',
                 onSelect = function()
                     print("Finish Work")
-                    hiredTrucks = false
+                    local sucess = lib.callback.await('lonf:trucker:clockOut', false)
+                    if sucess then
+                        print("TOMA BAN")
+                        print(truckDrivers)
+                    else
+                        print("NAO TOMA BAN")
+                        print(truckDrivers)
+                    end
                     updateOptions()
                 end,
                 distance = 1.5,
@@ -115,28 +156,6 @@ local function spawnPeds()
     SetModelAsNoLongerNeeded(pedModel)
     updateOptions()
 end
-
-local sphere = lib.zones.sphere({
-    coords = vec3(1276.07, -3231.75, 5.9),
-    radius = 10,
-    debug = true,
-    inside = function ()
-       print("foda")
-    end,
-    onEnter = function ()
-        trucker = NetToVeh(trailerNetId)
-        local vehicleHash = GetEntityModel(trucker)
-        
-        exports.ox_target:addModel(vehicleHash, {
-            {
-                icon = 'fa-solid fa-check',
-                label = 'Start Work',
-                distance = 2.5,
-            }
-        })
-    end,
-    onExit = onExit
-})
 
 
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
