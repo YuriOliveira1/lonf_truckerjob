@@ -1,7 +1,8 @@
 local config = lib.require 'config'
 local hiredTrucks = false
 local trailerNetId, truckerNetId
-local truckDrivers = {}
+local statusReward
+local truckDrivers
 
 local blipTruck = AddBlipForCoord(vec3(1241.65, -3257.28, 6.03))
 SetBlipSprite(blipTruck, 632)
@@ -12,17 +13,16 @@ BeginTextCommandSetBlipName('STRING')
 AddTextComponentSubstringPlayerName('Trucker Job')
 EndTextCommandSetBlipName(blipTruck)
 
--- Todo:
--- Fazer a box zones dos locais (fazer a checagem de dentro da area se tem o trailer)
--- Após desaclopar marcar o retorno para a base (Provavel ter que fazer alguma variavel para verificar, tem no forum lá do cfx)
--- Assim que retorna e marcar como Finish Work (Outra variavel para checar caso esteja terminado o serviço ou está querendo exluir o veiculo)
--- Deletar o caminhão
--- Player Recebe os itens
--- Timer começa a contar até a proxima entrega (Fazer isso nos server side com um array)
--- Fazer alguma forma de o timer contar no servidor
+local function isSameVehicle()
+    local playerPed = PlayerPedId()
 
-local function generateRandomRoute()
-    
+    local spawnVeh = GetEntityModel(NetToVeh(truckerNetId))
+    local vehicle = GetEntityModel(GetVehiclePedIsIn(playerPed, true))
+
+    local nameSpawnTruck = GetDisplayNameFromVehicleModel(spawnVeh)
+    local nameLastTruck = GetDisplayNameFromVehicleModel(vehicle)
+
+    return nameSpawnTruck == nameLastTruck
 end
 
 local function isTrailerAttached(netId)
@@ -35,26 +35,46 @@ local function isTrailerAttached(netId)
     end
 end
 
+local function generateRandomRoute()
+    return math.random(1, #config.locations)
+end
+
+local function generateCoords(route)
+    return config.locations[route]
+end
+
 local function createDeliveryZone()
-    local sphere = lib.zones.sphere({
-        coords = vec3(1276.07, -3231.75, 5.9),
-        radius = 10,
+    local index = generateRandomRoute()
+    local selectedRoute = generateCoords(index)
+    local blipRoute = routeDelivery(selectedRoute)
+    local sphere
+
+    sphere = lib.zones.sphere({
+        coords = selectedRoute,
+        radius = 8,
         debug = true,
         inside = function()
-            if IsControlJustPressed(0, 46) and isTrailerAttached(truckerNetId) then 
+            if IsControlJustPressed(0, 46) and isTrailerAttached(truckerNetId) then
                 local sucess = lib.callback.await('lonf:trucker:deleteEntity', false, trailerNetId)
-                if sucess then 
-                    delivered = true
+                if sucess then
+                    delivered, statusReward = lib.callback.await('lonf:trucker:delivered', false)
+                    blipBase = routeDelivery(config.coords)
+                    print(tostring(statusReward) .. " PAGIS")
                 end
             end
         end,
-        onEnter = onEnter,
-        onExit = onExit
+        onEnter = function()
+            RemoveBlip(blipRoute)
+        end,
+        onExit = function()
+            sphere:remove()
+        end
     })
 end
 
-local function routeDelivery()
-    RouteBlip = AddBlipForCoord(1258.38, -3101.29, 5.26)
+function routeDelivery(selectedRoute)
+    if not selectedRoute or not selectedRoute.x or not selectedRoute.y or not selectedRoute.z then return 0 end
+    local RouteBlip = AddBlipForCoord(selectedRoute.x, selectedRoute.y, selectedRoute.z)
     SetBlipSprite(RouteBlip, 1)
     SetBlipDisplay(RouteBlip, 4)
     SetBlipScale(RouteBlip, 0.8)
@@ -66,6 +86,7 @@ local function routeDelivery()
     BeginTextCommandSetBlipName('STRING')
     AddTextComponentSubstringPlayerName('Next Customer')
     EndTextCommandSetBlipName(RouteBlip)
+    return RouteBlip
 end
 
 local function hireTruck(netId)
@@ -73,13 +94,14 @@ local function hireTruck(netId)
         if NetworkDoesEntityExistWithNetworkId(netId) then
             return NetToVeh(truck)
         end
-    end, "error bro", 1000)
+    end, "error bro", 1500)
 end
 
 local function updateOptions()
+
     exports.ox_target:removeModel(config.model)
 
-    if not hiredTrucks then
+    if not hiredTrucks and not statusReward then
         exports.ox_target:addModel(config.model, {
             {
                 icon = 'fa-solid fa-check',
@@ -107,8 +129,8 @@ local function updateOptions()
 
                     hiredTrucks = true
 
-                    delivered = lib.callback.await('lonf:trucker:clockIn', false)
-                    print(delivered)
+                    inRoute, delivered, statusReward = lib.callback.await('lonf:trucker:clockIn', false)
+                    print(inRoute, delivered, statusReward)
 
                     routeDelivery()
                     createDeliveryZone()
@@ -124,15 +146,23 @@ local function updateOptions()
                 label = 'Finish Work',
                 onSelect = function()
                     print("Finish Work")
-                    local sucess = lib.callback.await('lonf:trucker:clockOut', false)
-                    if sucess then
-                        print("TOMA BAN")
-                        print(truckDrivers)
+
+                    if not statusReward then
+                        local isSame = isSameVehicle()
+                        local inRoute, newStatusReward = lib.callback.await('lonf:trucker:clockOut', false, isSame)
+                        statusReward = newStatusReward
+
+                        if statusReward then
+                            RemoveBlip(blipBase)
+                            print("Recompensa recebida!")
+                        else
+                            print("Algo deu errado ao tentar pegar a recompensa.")
+                        end
+
+                        updateOptions()
                     else
-                        print("NAO TOMA BAN")
-                        print(truckDrivers)
+                        print("Você já recebeu sua recompensa.")
                     end
-                    updateOptions()
                 end,
                 distance = 1.5,
             }
@@ -168,6 +198,12 @@ AddEventHandler('onResourceStart', function(resourceName)
     end
 end)
 
-CreateThread(function()
-
+CreateThread(function ()
+    while true do
+        Wait(100)
+        
+        local blah, bruh, breh = lib.callback.await('lonf:trucker:getStatus', 1000)
+        
+        print(blah, bruh, breh)
+    end
 end)
