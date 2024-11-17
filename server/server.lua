@@ -1,43 +1,98 @@
 local config = lib.require 'config'
 local truckDrivers = {}
+items = {
+    "rubber",
+    "copper",
+    "plastic",
+    "glass",
+    "steel",
+    "iron",
+    "rubber"
+}
+
 local function generateRandomModel(listLenght)
     return math.random(1, listLenght)
 end
 
-local function payment()
-    
+local function payment(src)
+    for _, item in pairs(items) do
+        local quantityReward = math.random(config.minReward, config.maxReward)
+
+        exports.ox_inventory:AddItem(src, item, quantityReward)
+    end
 end
 
-lib.callback.register('lonf:trucker:clockOut', function (source)
-
+lib.callback.register('lonf:trucker:getStatus', function(source)
     local src = source
-    local Player = exports.qbx_core:GetPlayer(src)
-    local pos = GetEntityCoords(GetPlayerPed(src))
+    local identifier = GetPlayerIdentifier(src, 0)
 
-    if truckDrivers[src].delivered then
-        print("Entrega os items")
-    else
-        print("Não entrega os items e excloi os veiculos")
-    end 
-
-
-    if not Player and #(pos - config.coords) > 5 then 
-        print("TOMA BAN")
-        return true 
-    else
-        print("NAO TOMA BAN")
-        return false
-    end
-end)
-
-lib.callback.register('lonf:trucker:clockIn', function (source)
-    local src = source
-
-    truckDrivers[src] = {
-        delivered = true
+    truckDrivers[identifier] = {
+        inRoute = truckDrivers[identifier].inRoute,
+        delivered = truckDrivers[identifier].delivered,
+        getReward = truckDrivers[identifier].getReward
     }
 
-    return truckDrivers[src].delivered
+    return truckDrivers[identifier].inRoute, truckDrivers[identifier].delivered, truckDrivers[identifier].getReward
+end)
+
+lib.callback.register('lonf:trucker:delivered', function (source) -- Add coords for check
+    local src = source
+    local identifier = GetPlayerIdentifier(src, 0)
+
+    truckDrivers[identifier] = {
+        delivered = true,
+        inRoute = inRoute,
+        getReward = false
+    }
+
+    print(tostring(truckDrivers[identifier].getReward) .. " delivered")
+    
+    return truckDrivers[identifier].delivered, truckDrivers[identifier].getReward
+end)
+
+lib.callback.register('lonf:trucker:clockOut', function (source, isSame)
+    local src = source
+    local identifier = GetPlayerIdentifier(src, 0)
+    local Player = exports.qbx_core:GetPlayer(src)
+    local ped = GetPlayerPed(src)
+    local pos = GetEntityCoords(ped)
+    print(isSame)
+
+    truckDrivers[identifier] = {
+        inRoute = false,
+        delivered = truckDrivers[identifier].delivered or false,
+        getReward = false
+    }
+
+    print(truckDrivers[identifier].getReward)
+
+    if not Player and #(pos - config.coords) > 5 then 
+        print("TOMA BAN VAGABUNDA")
+    else
+        if truckDrivers[identifier].delivered and isSame then
+            payment(src)
+            truckDrivers[identifier].getReward = true
+        end
+    end
+
+    print(tostring(truckDrivers[identifier].getReward) .. " ClockOut")
+
+    return truckDrivers[identifier].inRoute, truckDrivers[identifier].getReward
+end)
+
+lib.callback.register('lonf:trucker:clockIn', function (source, nameVeh)
+    local src = source
+    local identifier = GetPlayerIdentifier(src, 0)
+
+    truckDrivers[identifier] = {
+        inRoute = true,
+        delivered = false,
+        getReward = false
+    }
+
+    print(tostring(truckDrivers[identifier].getReward) .. " clockIn")
+
+    return truckDrivers[identifier].inRoute, truckDrivers[identifier].delivered , truckDrivers[identifier].getReward
 end)
 
 lib.callback.register('lonf:trucker:deleteEntity', function(source, netId)
@@ -64,12 +119,12 @@ lib.callback.register('lonf:trucker:spawnTrailer', function(source)
 
     local veh = NetworkGetEntityFromNetworkId(netId)
     if not veh or veh == 0 then
-        return 
+        return
     end
 
     local plate = "FOD" .. tostring(math.random(1000, 9999))
     SetVehicleNumberPlateText(veh, plate)
-    
+
     return netId
 end)
 
@@ -92,3 +147,4 @@ lib.callback.register('lonf:trucker:spawnTruck', function(source)
 
     return netId
 end)
+
