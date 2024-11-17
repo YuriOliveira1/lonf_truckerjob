@@ -14,5 +14,22 @@ return {
         `trailers2`,
         `trailers3`,
         `trailers4`,
-    }
+    },
+    items = {
+        "rubber",
+        "copper",
+        "plastic",
+        "glass",
+        "steel",
+        "iron",
+        "rubber"
+    },
+    locations = {
+        vec3(-597.48, 5298.26, 70.6),
+        vec3(-79.79, 6548.77, 31.88),
+        vec3(1708.19, 4803.39, 42.18),
+        vec3(-67.79, 1903.76, 196.64),
+    },
+    minReward = 20,
+    maxReward = 35
 }
