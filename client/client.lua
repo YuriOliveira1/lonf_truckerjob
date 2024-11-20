@@ -2,7 +2,6 @@ local config = lib.require 'config'
 local hiredTrucks = false
 local trailerNetId, truckerNetId
 local statusReward
-local truckDrivers
 
 local blipTruck = AddBlipForCoord(vec3(1241.65, -3257.28, 6.03))
 SetBlipSprite(blipTruck, 632)
@@ -52,14 +51,13 @@ local function createDeliveryZone()
     sphere = lib.zones.sphere({
         coords = selectedRoute,
         radius = 8,
-        debug = true,
+        debug = false,
         inside = function()
             if IsControlJustPressed(0, 46) and isTrailerAttached(truckerNetId) then
                 local sucess = lib.callback.await('lonf:trucker:deleteEntity', false, trailerNetId)
                 if sucess then
                     delivered, statusReward = lib.callback.await('lonf:trucker:delivered', false)
                     blipBase = routeDelivery(config.coords)
-                    print(tostring(statusReward) .. " PAGIS")
                 end
             end
         end,
@@ -98,10 +96,9 @@ local function hireTruck(netId)
 end
 
 local function updateOptions()
-
     exports.ox_target:removeModel(config.model)
 
-    if not hiredTrucks and not statusReward then
+    if not hiredTrucks then
         exports.ox_target:addModel(config.model, {
             {
                 icon = 'fa-solid fa-check',
@@ -114,8 +111,7 @@ local function updateOptions()
 
                     if isTruckNear or isTrailerNear then
                         lib.notify({
-                            title = 'Notification title',
-                            description = 'Notification description',
+                            title = 'Veiculo Alugado Com Sucesso',
                             type = 'success'
                         })
                         return
@@ -130,8 +126,7 @@ local function updateOptions()
                     hiredTrucks = true
 
                     inRoute, delivered, statusReward = lib.callback.await('lonf:trucker:clockIn', false)
-                    print(inRoute, delivered, statusReward)
-
+                    
                     routeDelivery()
                     createDeliveryZone()
                     updateOptions()
@@ -145,8 +140,6 @@ local function updateOptions()
                 icon = 'fa-solid fa-check',
                 label = 'Finish Work',
                 onSelect = function()
-                    print("Finish Work")
-
                     if not statusReward then
                         local isSame = isSameVehicle()
                         local inRoute, newStatusReward = lib.callback.await('lonf:trucker:clockOut', false, isSame)
@@ -154,7 +147,10 @@ local function updateOptions()
 
                         if statusReward then
                             RemoveBlip(blipBase)
-                            print("Recompensa recebida!")
+                            local sucess = lib.callback.await('lonf:trucker:deleteEntity', false, truckerNetId)
+                            if sucess then
+                                print("Recompensa recebida!")
+                            end
                         else
                             print("Algo deu errado ao tentar pegar a recompensa.")
                         end
@@ -163,6 +159,9 @@ local function updateOptions()
                     else
                         print("Você já recebeu sua recompensa.")
                     end
+
+                    hiredTrucks = false
+                    updateOptions()
                 end,
                 distance = 1.5,
             }
@@ -195,15 +194,5 @@ end)
 AddEventHandler('onResourceStart', function(resourceName)
     if resourceName == GetCurrentResourceName() then
         spawnPeds()
-    end
-end)
-
-CreateThread(function ()
-    while true do
-        Wait(100)
-        
-        local blah, bruh, breh = lib.callback.await('lonf:trucker:getStatus', 1000)
-        
-        print(blah, bruh, breh)
     end
 end)
