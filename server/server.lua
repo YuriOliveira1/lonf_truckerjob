@@ -1,5 +1,6 @@
 local config = lib.require 'config'
 local truckDrivers = {}
+local timeout = {}
 items = {
     "rubber",
     "copper",
@@ -35,7 +36,7 @@ lib.callback.register('lonf:trucker:getStatus', function(source)
     return truckDrivers[identifier].inRoute, truckDrivers[identifier].delivered, truckDrivers[identifier].getReward
 end)
 
-lib.callback.register('lonf:trucker:delivered', function (source) -- Add coords for check
+lib.callback.register('lonf:trucker:delivered', function(source)  -- Add coords for check
     local src = source
     local identifier = GetPlayerIdentifier(src, 0)
 
@@ -45,12 +46,10 @@ lib.callback.register('lonf:trucker:delivered', function (source) -- Add coords 
         getReward = false
     }
 
-    print(tostring(truckDrivers[identifier].getReward) .. " delivered")
-    
     return truckDrivers[identifier].delivered, truckDrivers[identifier].getReward
 end)
 
-lib.callback.register('lonf:trucker:clockOut', function (source, isSame)
+lib.callback.register('lonf:trucker:clockOut', function(source, isSame)
     local src = source
     local identifier = GetPlayerIdentifier(src, 0)
     local Player = exports.qbx_core:GetPlayer(src)
@@ -66,8 +65,8 @@ lib.callback.register('lonf:trucker:clockOut', function (source, isSame)
 
     print(truckDrivers[identifier].getReward)
 
-    if not Player and #(pos - config.coords) > 5 then 
-        print("TOMA BAN VAGABUNDA")
+    if not Player and #(pos - config.coords) > 5 then
+        exports.qbx_core:ExploitBan(src, "Exploit Ban")
     else
         if truckDrivers[identifier].delivered and isSame then
             payment(src)
@@ -75,12 +74,10 @@ lib.callback.register('lonf:trucker:clockOut', function (source, isSame)
         end
     end
 
-    print(tostring(truckDrivers[identifier].getReward) .. " ClockOut")
-
     return truckDrivers[identifier].inRoute, truckDrivers[identifier].getReward
 end)
 
-lib.callback.register('lonf:trucker:clockIn', function (source, nameVeh)
+lib.callback.register('lonf:trucker:clockIn', function(source, nameVeh)
     local src = source
     local identifier = GetPlayerIdentifier(src, 0)
 
@@ -90,9 +87,7 @@ lib.callback.register('lonf:trucker:clockIn', function (source, nameVeh)
         getReward = false
     }
 
-    print(tostring(truckDrivers[identifier].getReward) .. " clockIn")
-
-    return truckDrivers[identifier].inRoute, truckDrivers[identifier].delivered , truckDrivers[identifier].getReward
+    return truckDrivers[identifier].inRoute, truckDrivers[identifier].delivered, truckDrivers[identifier].getReward
 end)
 
 lib.callback.register('lonf:trucker:deleteEntity', function(source, netId)
@@ -147,4 +142,3 @@ lib.callback.register('lonf:trucker:spawnTruck', function(source)
 
     return netId
 end)
-
